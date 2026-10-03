@@ -5,3 +5,6 @@ KEBUTUHAN PENGGUNA:
 - Create, Read, Update, Delete operations	Transaksi Manual Cash Flow
 - Status changes / state-based behavior	Status Order: Selesai / Dibatalkan
 - Multi-condition logic / business rules	Aturan Cash Flow + source transaksi + kategori
+
+Kebutuhan pengguna saat ini lebih ke pengaplikasian Bot manager untuk mengatur keuangan usaha, Bot Telegram dengan API Gemini AI yang bertujuan untuk image reading.
+Saat ini usaha juga membutuhkan pengaplikasian baru yaitu mencetak keseluruhan pemasukan dan pengeluaran dalam bentuk excel.
