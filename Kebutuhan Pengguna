@@ -1,0 +1,7 @@
+KEBUTUHAN PENGGUNA:
+- Akuntan sistem
+- Numeric input and clear boundaries -	Input Nominal transaksi Cash Flow
+- Text input and validation rules	Keterangan/Description transaksi
+- Create, Read, Update, Delete operations	Transaksi Manual Cash Flow
+- Status changes / state-based behavior	Status Order: Selesai / Dibatalkan
+- Multi-condition logic / business rules	Aturan Cash Flow + source transaksi + kategori
