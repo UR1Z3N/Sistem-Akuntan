@@ -1,0 +1,66 @@
+# Project Context
+
+## Project
+Accounting Management System
+
+## Stack
+Frontend: React + TypeScript
+Backend: Laravel
+Database: MySQL
+Auth: JWT
+
+## Architecture
+
+Frontend
+   ↓ REST API
+Laravel API
+   ↓
+Service Layer
+   ↓
+Repository
+   ↓
+MySQL
+
+## Main Modules
+
+- Authentication
+- Cashflow
+- Expense
+- Revenue
+- Inventory
+- Reporting
+- Dashboard
+
+## Important Rules
+
+Income:
+amount > 0
+
+Expense:
+amount > 0
+cannot exceed available balance
+
+Transaction Status:
+DRAFT
+POSTED
+CANCELLED
+
+POSTED transactions cannot be deleted.
+
+## Coding Rules
+
+Controller
+↓
+Service
+↓
+Repository
+
+Never place business logic inside Controller.
+
+## Important Files
+
+routes/api.php
+app/Services/
+app/Repositories/
+resources/js/
+database/migrations/
