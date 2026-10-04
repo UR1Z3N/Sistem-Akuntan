@@ -79,10 +79,23 @@ try {
 }
 
 const parseRupiah = (val) => {
-    if (!val) return 0;
-    if (typeof val === 'number') return val;
-    return parseFloat(val.toString().replace(/[^0-9.-]+/g, "")) || 0;
-}
+    if (val === null || val === undefined || val === '') return 0;
+    if (typeof val === 'number') return Number.isFinite(val) ? val : 0;
+    const normalized = val.toString().trim().replace(/[^0-9,-]+/g, '').replace(/,/g, '.');
+    const parsed = Number(normalized);
+    return Number.isFinite(parsed) ? parsed : 0;
+};
+
+const validatePositiveAmount = (value, fieldName = 'Nominal') => {
+    const amount = parseRupiah(value);
+    if (!Number.isFinite(amount) || amount <= 0) {
+        return { valid: false, amount: 0, message: `${fieldName} harus berupa angka lebih dari Rp0.` };
+    }
+    if (!Number.isSafeInteger(amount)) {
+        return { valid: false, amount: 0, message: `${fieldName} terlalu besar atau tidak valid.` };
+    }
+    return { valid: true, amount };
+};
 
 async function simpanKeFirestore(data) {
     try {
@@ -337,6 +350,18 @@ module.exports = async function handleUpdate(req, res) {
     }
 
     try {
+        const webhookSecret = (process.env.TELEGRAM_WEBHOOK_SECRET || '').trim();
+        if (webhookSecret) {
+            const receivedSecret = req.headers['x-telegram-bot-api-secret-token'];
+            if (receivedSecret !== webhookSecret) {
+                console.warn('Rejected webhook request: invalid Telegram secret token.');
+                return res.status(401).send('Unauthorized');
+            }
+        } else if (process.env.VERCEL) {
+            console.error('TELEGRAM_WEBHOOK_SECRET wajib disetting pada deployment Vercel.');
+            return res.status(503).send('Webhook security is not configured.');
+        }
+
         if (initError || !bot) {
             try {
                 initializeGlobals();
@@ -542,7 +567,7 @@ Total \t\t${formatRp(totalAll)}`;
                 await bot.sendDocument(chatId, excelBuffer, { caption: `📊 Laporan Rekapan (Excel) - ${displayDate}` }, { filename: `Rekapan_${sysDate}.xlsx`, contentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
             } catch (error) {
                 console.error("Export Error:", error);
-                await bot.sendMessage(chatId, "❌ Gagal mengunduh file laporan Excel. Detail: " + error.message);
+                await bot.sendMessage(chatId, "❌ Gagal mengunduh file laporan Excel. Silakan coba lagi.");
             }
             return res.status(200).send('OK');
         }
@@ -588,7 +613,9 @@ Total \t\t${formatRp(totalAll)}`;
                         brankasAmount = parseInt(cleanString, 10) || 0;
                     }
 
-                    if (brankasAmount >= 0) {
+                    const brankasValidation = validatePositiveAmount(brankasAmount, 'Nominal brankas');
+                    if (brankasValidation.valid) {
+                        brankasAmount = brankasValidation.amount;
                         await db.collection('daily_cash').doc(sysDate).set({
                             brankas: brankasAmount,
                             updatedAt: FieldValue.serverTimestamp()
@@ -613,6 +640,9 @@ Total \t\t${formatRp(totalAll)}`;
                         await bot.sendMessage(chatId, replyMsg, { parse_mode: 'Markdown' });
                         return res.status(200).send('OK');
                     }
+
+                    await bot.sendMessage(chatId, `❌ ${brankasValidation.message}\nContoh: Brankas 250000`);
+                    return res.status(200).send('OK');
                 }
             }
 
@@ -697,9 +727,9 @@ Total \t\t${formatRp(totalAll)}`;
         console.error("Unhandled message error:", err);
         if (bot && req.body && req.body.message && req.body.message.chat) {
             try {
-                await bot.sendMessage(req.body.message.chat.id, "❌ Terjadi Error Fatal di Vercel: \n" + err.message);
+                await bot.sendMessage(req.body.message.chat.id, "❌ Terjadi gangguan pada sistem. Silakan coba lagi beberapa saat.");
             } catch (e) { }
         }
-        res.status(500).send('Error: ' + err.message);
+        res.status(500).send('Internal Server Error');
     }
 };
