@@ -1,28 +1,20 @@
+require('dotenv').config();
 const fs = require('fs');
+const path = require('path');
 
-const token = '8471477013:AAGt5huOgwTFCT2HKqZ-OIAOEDWEac_ciPc';
-const filePath = 'F:/Website/bot telgram sambel orek/assets/logo.jpg';
+const token = (process.env.TELEGRAM_BOT_TOKEN || '').trim();
+const filePath = path.resolve(__dirname, 'assets', 'logo.jpg');
 
 async function setProfilePhoto() {
-    try {
-        const formData = new FormData();
-        formData.append('photo', JSON.stringify({ type: 'static', photo: 'attach://logo' }));
-        
-        const fileBuffer = fs.readFileSync(filePath);
-        // Convert Buffer to Blob for fetch API
-        const blob = new Blob([fileBuffer], { type: 'image/jpeg' });
-        formData.append('logo', blob, 'logo.jpg');
-
-        const response = await fetch(`https://api.telegram.org/bot${token}/setMyProfilePhoto`, {
-            method: 'POST',
-            body: formData
-        });
-
-        const result = await response.json();
-        console.log("Result:", result);
-    } catch (e) {
-        console.error("Error:", e);
-    }
+    if (!token) throw new Error('TELEGRAM_BOT_TOKEN belum disetting.');
+    if (!fs.existsSync(filePath)) throw new Error(`Logo tidak ditemukan: ${filePath}`);
+    const formData = new FormData();
+    formData.append('photo', JSON.stringify({ type: 'static', photo: 'attach://logo' }));
+    const fileBuffer = fs.readFileSync(filePath);
+    formData.append('logo', new Blob([fileBuffer], { type: 'image/jpeg' }), 'logo.jpg');
+    const response = await fetch(`https://api.telegram.org/bot${token}/setMyProfilePhoto`, { method: 'POST', body: formData });
+    const result = await response.json();
+    if (!result.ok) throw new Error(result.description || 'Telegram menolak perubahan foto profil.');
+    console.log('✅ Foto profil bot berhasil diperbarui.');
 }
-
-setProfilePhoto();
+setProfilePhoto().catch((error) => { console.error('❌ Gagal memperbarui foto profil:', error.message); process.exitCode = 1; });

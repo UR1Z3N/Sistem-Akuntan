@@ -79,9 +79,37 @@ try {
 }
 
 const parseRupiah = (val) => {
-    if (!val) return 0;
-    if (typeof val === 'number') return val;
+    if (val === null || val === undefined || val === '') return 0;
+    if (typeof val === 'number') return Number.isFinite(val) ? val : 0;
     return parseFloat(val.toString().replace(/[^0-9.-]+/g, "")) || 0;
+};
+
+function parsePositiveRupiahInput(input) {
+    if (typeof input !== 'string') return null;
+    const normalized = input.trim().toLowerCase();
+    const match = normalized.match(/([\d.,]+)\s*(jt|juta|rb|ribu|k)?/i);
+    if (!match) return null;
+
+    let amount;
+    const suffix = (match[2] || '').toLowerCase();
+    if (suffix) {
+        const numeric = Number.parseFloat(match[1].replace(',', '.'));
+        if (!Number.isFinite(numeric)) return null;
+        amount = numeric * ((suffix === 'jt' || suffix === 'juta') ? 1_000_000 : 1_000);
+    } else {
+        const digits = match[1].replace(/\D/g, '');
+        amount = Number.parseInt(digits, 10);
+    }
+
+    if (!Number.isSafeInteger(Math.round(amount)) || amount <= 0) return null;
+    return Math.round(amount);
+}
+
+function isValidTelegramWebhook(req) {
+    const expected = process.env.TELEGRAM_WEBHOOK_SECRET;
+    if (!expected) return true;
+    const received = req.headers['x-telegram-bot-api-secret-token'];
+    return typeof received === 'string' && received === expected;
 }
 
 async function simpanKeFirestore(data) {
@@ -319,7 +347,7 @@ async function handleMediaGroup(chatId, mediaGroupId, fileId) {
     } catch (e) {
         console.error("MediaGroup Error:", e);
         try {
-            await bot.sendMessage(chatId, `⚠️ Debug Error (MediaGroup): ${e.message}`);
+            await bot.sendMessage(chatId, "⚠️ Album foto gagal diproses sekaligus. Saya coba proses foto ini secara terpisah.");
         } catch (err) {}
         await processPhotos(chatId, [fileId]);
     }
@@ -337,6 +365,10 @@ module.exports = async function handleUpdate(req, res) {
     }
 
     try {
+        if (!isValidTelegramWebhook(req)) {
+            return res.status(401).send('Unauthorized');
+        }
+
         if (initError || !bot) {
             try {
                 initializeGlobals();
@@ -542,7 +574,7 @@ Total \t\t${formatRp(totalAll)}`;
                 await bot.sendDocument(chatId, excelBuffer, { caption: `📊 Laporan Rekapan (Excel) - ${displayDate}` }, { filename: `Rekapan_${sysDate}.xlsx`, contentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
             } catch (error) {
                 console.error("Export Error:", error);
-                await bot.sendMessage(chatId, "❌ Gagal mengunduh file laporan Excel. Detail: " + error.message);
+                await bot.sendMessage(chatId, "❌ Gagal membuat file laporan Excel. Silakan coba lagi.");
             }
             return res.status(200).send('OK');
         }
@@ -573,22 +605,8 @@ Total \t\t${formatRp(totalAll)}`;
             
             const isBrankasInput = /^(uang\s+)?brang?k(as|at)/i.test(lowerText);
             if (isBrankasInput) {
-                const slangMatch = lowerText.match(/([\d.,]+)\s*(jt|juta|rb|ribu|k)?/i);
-                if (slangMatch && slangMatch[1]) {
-                    let numStr = slangMatch[1].replace(/,/g, '.');
-                    let multiplierStr = slangMatch[2] ? slangMatch[2].toLowerCase() : '';
-                    let brankasAmount = 0;
-
-                    if (multiplierStr) {
-                        brankasAmount = parseFloat(numStr);
-                        if (multiplierStr === 'jt' || multiplierStr === 'juta') brankasAmount *= 1000000;
-                        else if (multiplierStr === 'rb' || multiplierStr === 'ribu' || multiplierStr === 'k') brankasAmount *= 1000;
-                    } else {
-                        const cleanString = numStr.replace(/\D/g, '');
-                        brankasAmount = parseInt(cleanString, 10) || 0;
-                    }
-
-                    if (brankasAmount >= 0) {
+                const brankasAmount = parsePositiveRupiahInput(lowerText);
+                if (brankasAmount !== null) {
                         await db.collection('daily_cash').doc(sysDate).set({
                             brankas: brankasAmount,
                             updatedAt: FieldValue.serverTimestamp()
@@ -612,8 +630,10 @@ Total \t\t${formatRp(totalAll)}`;
                                          
                         await bot.sendMessage(chatId, replyMsg, { parse_mode: 'Markdown' });
                         return res.status(200).send('OK');
-                    }
                 }
+
+                await bot.sendMessage(chatId, "❌ Nominal Brankas harus berupa angka lebih dari Rp0. Contoh: *Brankas 250000* atau *Brankas 250rb*.", { parse_mode: 'Markdown' });
+                return res.status(200).send('OK');
             }
 
             if (greetingPatterns.test(msg.text.trim())) {
@@ -697,9 +717,9 @@ Total \t\t${formatRp(totalAll)}`;
         console.error("Unhandled message error:", err);
         if (bot && req.body && req.body.message && req.body.message.chat) {
             try {
-                await bot.sendMessage(req.body.message.chat.id, "❌ Terjadi Error Fatal di Vercel: \n" + err.message);
+                await bot.sendMessage(req.body.message.chat.id, "❌ Terjadi gangguan pada sistem. Silakan coba lagi beberapa saat.");
             } catch (e) { }
         }
-        res.status(500).send('Error: ' + err.message);
+        res.status(500).send('Internal Server Error');
     }
 };
